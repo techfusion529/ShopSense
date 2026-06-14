@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/AgentSchema/refs/heads/main/schemas/v1.0/ContainerAgent.yaml
+
+name: ShopSense
+kind: hosted
+protocols:
+  - protocol: responses
+    version: 1.0.0
+environment_variables:
+  - name: AZURE_AI_MODEL_DEPLOYMENT_NAME
+    value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+  - name: MCP_SERVERS_CONFIG
+    value: ${MCP_SERVERS_CONFIG}
+description: >
+  ShopSense is an E-Commerce Price Intelligence Agent.
+  It demonstrates the hybrid MCP + ephemeral capability waterfall:
+  predefined MCP fetch tools retrieve live product prices and policies from
+  the web (Amazon, Flipkart, manufacturer sites), while on-demand ephemeral
+  Python tools are synthesized at runtime for custom computations — multi-item
+  budget checks, effective price after GST + offers + reward points, opportunity
+  cost analysis, and product comparison scoring. No two calculations need the
+  same script; the agent generates exactly what is needed, runs it in a secure
+  sandbox, and discards it.
+metadata:
+  tags:
+    - AI Agent Hosting
+    - Responses Protocol
+    - Bring Your Own
+    - LangGraph
+    - Tool Calling
+    - Ephemeral Synthesis
+    - E-Commerce Intelligence
+    - Python
+resources:
+  cpu: '1.0'
+  memory: 2.0Gi
+dockerfile_path: Dockerfile
