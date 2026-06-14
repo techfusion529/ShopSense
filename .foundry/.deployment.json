@@ -1,0 +1,13 @@
+{
+  "hostedAgentDeployOptions": {
+    "deploymentMethod": "zip",
+    "zipPackageMode": "remote",
+    "zipRuntime": "python_3_14",
+    "zipEntryPoint": [
+      "python3",
+      "main.py"
+    ]
+  },
+  "projectId": "3db85a1f-704e-4b0a-abdf-ab274beb9446",
+  "containerRegistry": "230d834autogenesis6803acr.azurecr.io"
+}
