@@ -1,30 +1,46 @@
-# LangGraph Multi-turn Chat Agent (Responses Protocol)
+# ShopSense: E-Commerce Price Intelligence Agent
 
 A multi-turn conversational agent built with [LangGraph](https://langchain-ai.github.io/langgraph/)
 and Azure OpenAI, hosted via the **responses** protocol.
 
 ## What it demonstrates
 
-- **LangGraph agent graph** with conditional tool-calling routing
-- **Two built-in tools**: `get_current_time` and `calculator`
-- **Server-side conversation state** via `previous_response_id` — no application-side session storage
-- **Streaming** output over the responses protocol
-- **Azure OpenAI** with `DefaultAzureCredential` authentication
+- **ShopSense Agent**: An E-Commerce Price Intelligence agent that handles complex shopping queries.
+- **LangGraph Agent Graph**: Advanced graph routing with a 2-Tier waterfall architecture.
+- **Dynamic Tool Generation**: The ability to synthesize, validate, and securely execute Python code on the fly for unhandled calculations.
+- **Server-side Conversation State** via `previous_response_id` — no application-side session storage.
+- **Streaming Output** over the responses protocol.
+- **Azure OpenAI** with `DefaultAzureCredential` authentication.
 
-## Architecture
+## High-Level Design (HLD)
 
+The agent utilizes a **2-Tier Waterfall Architecture** for robust tool execution and fallback logic:
+
+- **Tier 1 (Static Tools)**: Predefined tools (like `fetch`, `memory`) directly available to the LLM.
+- **Tier 2 (Ephemeral Synthesis)**: If a request requires custom logic or calculations not covered by static tools, the agent triggers an on-the-fly code generation pipeline.
+
+### Ephemeral Synthesis Pipeline
+
+When the agent requires a dynamic calculation, it invokes the `generate_ephemeral` tool, which triggers the following workflow:
+
+```mermaid
+graph TD
+    A[Agent Chatbot] -->|Gap Detected| B(generate_ephemeral Tool)
+    B --> C{Code Generator LLM}
+    C -->|Generates Python| D[AST Validator]
+    
+    D -->|Invalid/Unsafe| C
+    D -->|Valid| E[Sandbox Executor]
+    
+    E -->|Runs in Isolated Process| F((Result / Output))
+    F -->|Return to Context| A
+    
+    E -.->|Logs Capability Gap| G[Audit Trail]
 ```
-┌───────┐    ┌─────────┐    ┌───────┐
-│ START │───▶│ chatbot  │───▶│  END  │
-└───────┘    └────┬─────┘    └───────┘
-                  │ tool_calls?
-                  ▼
-             ┌─────────┐
-             │  tools   │
-             └────┬─────┘
-                  │
-                  └──▶ chatbot (loop)
-```
+
+1. **Code Generation**: A dedicated LLM generates a type-hinted, self-contained Python script to solve the specific task.
+2. **AST Validation**: The code is parsed to an Abstract Syntax Tree to block dangerous imports (`os`, `sys`) and built-ins (`exec`, `eval`). If validation fails, it loops back to the LLM for a correction (up to 2 retries).
+3. **Sandbox Execution**: The validated code runs in an isolated subprocess with stripped environment variables and a strict 30-second CPU timeout.
 
 ## Key difference from invocations protocol
 

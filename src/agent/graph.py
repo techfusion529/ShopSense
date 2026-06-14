@@ -56,71 +56,14 @@ def generate_ephemeral(query: str) -> str:
     return f"[ephemeral stub] query={query!r}"
 
 
-# ── Ephemeral execution ───────────────────────────────────────────────────────
-
-def _safe_exec_ephemeral(query: str) -> str:
-    """
-    Execute a simple arithmetic expression or produce a structured result
-    from a plain-English shopping calculation description.
-
-    This runs fully in-process with no network or filesystem access.
-    """
-    # Try to evaluate simple arithmetic expressions directly
-    safe_expr = query.strip()
-
-    # Clean up common natural-language artifacts
-    for pat, repl in [
-        ("₹", ""),
-        (",", ""),
-        ("Rs.", ""),
-        ("Rs", ""),
-        (" minus ", " - "),
-        (" plus ", " + "),
-        (" times ", " * "),
-        (" divided by ", " / "),
-        (" x ", " * "),
-        ("%", "/100"),
-    ]:
-        safe_expr = safe_expr.replace(pat, repl)
-
-    # Allow only safe AST nodes
-    _ALLOWED = (
-        ast.Expression, ast.BinOp, ast.UnaryOp,
-        ast.Constant,                    # numbers/strings
-        ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod,
-        ast.Pow, ast.FloorDiv,
-        ast.USub, ast.UAdd,
-    )
-
-    # Extract the first numeric-looking chunk from query for a best-effort eval
-    import re
-    # Find the first standalone arithmetic expression in the query
-    m = re.search(r"[\d\s\.\+\-\*\/\(\)%,]+", query)
-    if m:
-        candidate = m.group(0).strip().replace(",", "").replace("%", "/100")
-        try:
-            tree = ast.parse(candidate, mode="eval")
-            for node in ast.walk(tree):
-                if not isinstance(node, _ALLOWED):
-                    break
-            else:
-                result = eval(compile(tree, "<ephemeral>", "eval"))  # noqa: S307
-                return f"Result: {result:,.2f}"
-        except Exception:
-            pass
-
-    # Fallback: return a structured acknowledgement
-    return (
-        f"Calculation queued: {query}\n"
-        "Please note: for full ephemeral tool execution, the agent synthesises "
-        "a computation step at runtime. The numbers you provided will be used."
-    )
-
 
 # ── Graph nodes ───────────────────────────────────────────────────────────────
 
 def build_graph(llm, mcp_tools: list):
     """Compile and return the LangGraph StateGraph for the ShopSense agent."""
+
+    from src.ephemeral.executor import EphemeralOrchestrator
+    orchestrator = EphemeralOrchestrator(llm=llm)
 
     # Scrub fetch tool description to avoid content-filter triggers
     clean_mcp_tools = []
@@ -183,7 +126,7 @@ def build_graph(llm, mcp_tools: list):
 
             if name == "generate_ephemeral":
                 query = args.get("query", "")
-                result = _safe_exec_ephemeral(query)
+                result = await orchestrator.execute(query)
             elif name in tool_map:
                 try:
                     result = await tool_map[name].ainvoke(args)
