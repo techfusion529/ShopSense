@@ -31,6 +31,6 @@ metadata:
     - E-Commerce Intelligence
     - Python
 resources:
-  cpu: '1.0'
-  memory: 2.0Gi
+  cpu: '0.5'
+  memory: 1.0Gi
 dockerfile_path: Dockerfile

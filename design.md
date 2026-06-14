@@ -1,14 +1,14 @@
-# System Design Document: Hybrid Agent Architecture with User-Controlled Permanent & Ephemeral Tools
+# System Design Document: ShopSense Agent Architecture
 
 ---
 
 ## 1. Executive Summary
 
-Enterprise deployments of AI agents struggle with "tool explosion" when bound directly to large Model Context Protocol (MCP) registries or massive API sets (500+ tools). This results in context window bloat, degraded tool selection accuracy, high latency, and elevated token costs. 
+Enterprise deployments of AI agents struggle with "tool explosion" when bound directly to large Model Context Protocol (MCP) registries or massive API sets. This results in context window bloat, degraded tool selection accuracy, high latency, and elevated token costs. 
 
-This design document outlines a **Hybrid Agent Architecture** that partitions capabilities dynamically into user-controlled permanent tools (high-frequency, run-scoped), on-demand tools (lazy-loaded), composed tools (runtime DAGs), and ephemeral tools (synthesized, sandboxed, and auto-destroyed at task completion). 
+This design document outlines the **ShopSense Agent Architecture** that utilizes a simplified 2-tier waterfall approach to partition capabilities dynamically into permanent tools (MCP tools provided directly in prompt) and ephemeral tools (synthesized, sandboxed, and auto-destroyed at task completion). 
 
-By giving users full authority to select which bound tools are permanent before each agent execution, the platform maximizes flexibility and token efficiency while maintaining robust security and fallback pathways.
+By giving users full authority to select which bound tools are permanent before each agent execution, the platform maximizes flexibility and token efficiency while maintaining robust security and fallback pathways for complex E-Commerce and Price Intelligence queries.
 
 ---
 
@@ -39,20 +39,17 @@ Allows users to configure their agent run profile programmatically or via a user
 ### 3.3 Execution Context Manager
 An execution-scoped state container created at the beginning of each run. It loads the permanent tools, maintains the schema catalog for the on-demand pool, tracks dynamically injected tools, and holds references to active ephemeral tools. It executes a mandatory teardown sequence to clean up resources when the run finishes.
 
-### 3.4 Capability Router
-A meta-tool exposed to the agent core. If the agent core determines that its permanent tool set cannot satisfy the user prompt, it delegates the capability description to the router. The router evaluates the request against on-demand schemas, potential composition plans, and ephemeral synthesis.
+### 3.4 Capability Routing (Graph logic)
+LangGraph handles dynamic routing. If the agent core determines that its permanent tool set cannot satisfy the user prompt (e.g. requires a complex calculation), it delegates the capability description to the ephemeral synthesis tool.
 
-### 3.5 Tool Composer
-An LLM-driven planning utility that attempts to combine multiple permanent tools into a Directed Acyclic Graph (DAG) to satisfy a capability request. It performs a schema validation check to ensure data flows between steps conform to expected Pydantic specifications before execution.
-
-### 3.6 Ephemeral Tool Synthesizer
+### 3.5 Ephemeral Tool Synthesizer
 A code-generation and validation pipeline. It translates a raw capability gap description into a clean Python script, schema-conforming interface definitions, and automatically generated unit tests.
 
-### 3.7 Sandbox Runtime
-A highly restricted execution wrapper (utilizing isolated Python subprocesses or secure container layers). The sandbox isolates ephemeral code from host credentials, system environment variables, network access (unless explicitly whitelisted), and limits execution time and memory.
+### 3.6 Sandbox Runtime
+A highly restricted execution wrapper (utilizing isolated Python subprocesses). The sandbox isolates ephemeral code from host credentials, system environment variables, network access (unless explicitly whitelisted), and limits execution time and memory.
 
-### 3.8 Audit Logger & Promotion Tracker
-An asynchronous logging system that records hashes of input, output, and generated code for compliance. It clusters capability gaps and alerts the user when an ephemeral tool is repeatedly generated, recommending a permanent tool binding or custom MCP integration.
+### 3.7 Audit Logger & Promotion Tracker
+An asynchronous logging system that records input, output, and execution time for compliance. It logs capability gaps and alerts the user when an ephemeral tool is repeatedly generated, recommending a permanent tool binding or custom MCP integration.
 
 ---
 
@@ -60,10 +57,8 @@ An asynchronous logging system that records hashes of input, output, and generat
 
 When a task requires a capability, the runtime routes the request through a strict priority structure:
 
-1. **Permanent MCP Tools (Tier 1):** The agent core first checks if the capability can be met by tools loaded directly in its active prompt context (the user-selected permanent tools).
-2. **On-Demand MCP Tools (Tier 2):** If not present, the Capability Router performs a semantic embedding search (using cosine similarity) over the catalog of remaining bound MCP tools. If a match is found above the similarity threshold (default 0.78), the router fetches the schema, dynamically wraps the tool, injects it into the execution context, and invokes it.
-3. **Tool Composition (Tier 3):** If no on-demand tool exists, the Tool Composer determines if two or more permanent tools can be combined (e.g., combining a database reader with a Python calculator). If a valid chain is planned and verified, it is executed.
-4. **Ephemeral Tool Synthesis (Tier 4):** If all previous checks yield no results, a capability gap is officially declared. The Ephemeral Tool Synthesizer generates, validates, runs, and destroys a bespoke script designed specifically for the request.
+1. **Permanent MCP Tools (Tier 1):** The agent core first checks if the capability can be met by tools loaded directly in its active prompt context (e.g., `fetch`, `memory`).
+2. **Ephemeral Tool Synthesis (Tier 2):** If the capability cannot be met by Tier 1 tools, a capability gap is declared. The Ephemeral Tool Synthesizer (`generate_ephemeral`) generates, validates, runs, and destroys a bespoke script designed specifically for the request.
 
 ---
 
@@ -112,9 +107,7 @@ By allowing users to pin only a handful of relevant tools for a specific task ra
 
 ### 7.2 Latency Trade-offs
 - **Permanent Tier:** 0 ms routing overhead.
-- **On-Demand Tier:** 100-300 ms overhead for fetching schemas and wrapping the tool dynamically.
-- **Composition Tier:** 200-500 ms for planning the DAG and checking input/output compatibility.
-- **Synthesis Tier:** 1,500-4,000 ms due to the round-trip code generation, unit test creation, and sandbox validation. 
+- **Synthesis Tier:** 1,500-4,000 ms due to the round-trip code generation, and sandbox validation.
 
 ---
 
